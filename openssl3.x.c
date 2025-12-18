@@ -62,28 +62,25 @@ static void clean_expired_auth_codes() {
 
 // Base64URL编码（JWT专用）
 static char* base64url_encode(const unsigned char *data, size_t len) {
-    // 计算输出长度
-    size_t encoded_len = ((len + 2) / 3) * 4;
-    char *buf = malloc(encoded_len + 1);
+    // 计算输出长度（Base64URL最多比Base64少3个填充字符）
+    size_t max_encoded_len = ((len + 2) / 3) * 4;
+    char *buf = malloc(max_encoded_len + 1);
     if (!buf) return NULL;
 
-    // 使用EVP_EncodeBlock进行Base64编码
+    // 使用EVP_EncodeBlock进行Base64编码（不会添加换行符）
     int out_len = EVP_EncodeBlock((unsigned char*)buf, data, len);
-    
-    // 移除换行符（如果有的话）
-    while (out_len > 0 && (buf[out_len-1] == '\n' || buf[out_len-1] == '\r')) {
-        out_len--;
+    if (out_len <= 0) {
+        free(buf);
+        return NULL;
     }
-    buf[out_len] = '\0';
 
-    // Base64转Base64URL
-    char *p = buf;
-    while (*p) {
-        if (*p == '+') *p = '-';
-        else if (*p == '/') *p = '_';
-        else if (*p == '=') { *p = '\0'; break; }
-        p++;
+    // Base64转Base64URL并移除填充
+    int dst_idx = 0;
+    for (int i = 0; i < out_len; i++) {
+        if (buf[i] == '=') break;  // 遇到填充字符，结束转换
+        buf[dst_idx++] = (buf[i] == '+') ? '-' : (buf[i] == '/') ? '_' : buf[i];
     }
+    buf[dst_idx] = '\0';
 
     return buf;
 }
